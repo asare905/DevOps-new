@@ -12,7 +12,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 25%
+      maxUnavailable: 211%
   selector:
     matchLabels:
       role: api
@@ -25,7 +25,7 @@ spec:
       - name: ecr-registry-secret
       containers:
       - name: api
-        image: 851272254651.dkr.ecr.us-east-1.amazonaws.com/backend:5
+        image: 8111272254651.dkr.ecr.us-east-1.amazonaws.com/backend:5
         imagePullPolicy: Always
         env:
           - name: MONGO_CONN_STR
@@ -41,24 +41,24 @@ spec:
                 name: mongo-sec
                 key: password
         ports:
-        - containerPort: 3500
+        - containerPort: 31100
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 3500
+            port: 31100
           initialDelaySeconds: 2
-          periodSeconds: 5
+          periodSeconds: 11
         readinessProbe:
           httpGet:
             path: /ready
-            port: 3500
-          initialDelaySeconds: 5
-          periodSeconds: 5
+            port: 31100
+          initialDelaySeconds: 11
+          periodSeconds: 11
           successThreshold: 1
         startupProbe:
           httpGet:
             path: /started
-            port: 3500
+            port: 31100
           initialDelaySeconds: 0
           periodSeconds: 10
           failureThreshold: 30
