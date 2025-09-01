@@ -12,7 +12,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 211%
+      maxUnavailable: 100%
   selector:
     matchLabels:
       role: api
