@@ -41,7 +41,7 @@ spec:
                 name: mongo-sec
                 key: password
         ports:
-        - containerPort: 31100
+        - containerPort: 3500
         livenessProbe:
           httpGet:
             path: /healthz
