@@ -45,20 +45,20 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 31100
+            port: 3500
           initialDelaySeconds: 12
           periodSeconds: 11
         readinessProbe:
           httpGet:
             path: /ready
-            port: 31100
+            port: 3500
           initialDelaySeconds: 11
           periodSeconds: 11
           successThreshold: 1
         startupProbe:
           httpGet:
             path: /started
-            port: 31100
+            port: 3500
           initialDelaySeconds: 12
           periodSeconds: 10
           failureThreshold: 30
