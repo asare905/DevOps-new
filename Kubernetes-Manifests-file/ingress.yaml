@@ -11,7 +11,7 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: techlearn-center.xyz
+    - host: asare905.xyz
       http:
         paths:
           - path: /api
