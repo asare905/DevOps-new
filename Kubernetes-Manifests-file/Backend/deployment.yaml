@@ -4,7 +4,7 @@ metadata:
   name: backend
   namespace: three-tier
   labels:
-    role: backend
+    role: api
     env: demo
 spec:
   replicas: 2
@@ -15,11 +15,11 @@ spec:
       maxUnavailable: 25%
   selector:
     matchLabels:
-      role: backend
+      role: api
   template:
     metadata:
       labels:
-        role: backend
+        role: api
     spec:
       imagePullSecrets:
       - name: ecr-registry-secret
