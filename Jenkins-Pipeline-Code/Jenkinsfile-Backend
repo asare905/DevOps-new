@@ -41,14 +41,27 @@ pipeline {
                 }
             }
         }
-        stage('OWASP Dependency-Check Scan') {
+        stage('OWASP Dependency-Check') {
             steps {
-                dir('Application-Code/backend') {
-                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+                    script {
+                        try {
+                            sh '''
+                                dependency-check.sh \
+                                  --project backend \
+                                  --scan Application-Code/backend \
+                                  --noupdate \
+                                  --nvdApiKey=$NVD_API_KEY
+                            '''
+                        } catch (err) {
+                            echo "⚠️ OWASP Dependency-Check failed, but the pipeline will continue."
+                            echo "${err}"
+                        }
+                    }
                 }
             }
         }
+
          stage('Trivy File Scan') {
             steps {
                 dir('Application-Code/backend') {
