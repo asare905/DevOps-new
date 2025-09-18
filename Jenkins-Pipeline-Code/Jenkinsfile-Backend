@@ -1,134 +1,160 @@
 pipeline {
     agent any 
     tools {
-        jdk 'jdk'  // Ensure this label is correct in your Global Tool Configuration
-        nodejs 'nodejs'     // Ensure this label is correct and Maven is installed in Global Tool Configuration
+        jdk 'jdk'          // Ensure this label is correct in Global Tool Configuration
+        nodejs 'nodejs'    // Ensure this label is correct in Global Tool Configuration
     }
+
     environment  {
-        // Define scanner home directly if using a global tool configuration for SonarScanner
         SCANNER_HOME = "${tool 'sonar-scanner'}"
         AWS_ACCOUNT_ID = credentials('ACCOUNT_ID')
         AWS_ECR_REPO_NAME = credentials('ECR_REPO2')
         AWS_DEFAULT_REGION = 'us-east-1'
         REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
     }
+
     stages {
         stage('Cleaning Workspace') {
-            steps {
-                cleanWs()
-            }
+            steps { cleanWs() }
         }
+
         stage('Checkout from Git') {
             steps {
-                // Assuming Git credentials and repository are correctly setup
-                git branch: 'e2e-3-tier-DevSecOps', credentialsId: 'github-token', url: 'https://github.com/techlearn-center/DevOps.git'
+                git branch: 'e2e-3-tier-DevSecOps', credentialsId: 'github-token', url: 'https://github.com/asare905/DevOps.git'
             }
         }
-        stage('Sonarqube Analysis') {
+
+        stage('SonarQube Analysis') {
             steps {
                 dir('Application-Code/backend') {
                     withSonarQubeEnv('sonar-server') {
-                        sh "${SCANNER_HOME}/bin/sonar-scanner -Dsonar.projectKey=three-tier-backend -Dsonar.projectName=three-tier-backend"
-                    }
-                }
-            }
-        }
-        stage('Quality Gate') {
-            steps {
-                script {
-                    // Ensure SonarQube integration is properly configured to use this step
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
-                }
-            }
-        }
-        stage('OWASP Dependency-Check') {
-            steps {
-                withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
-                    script {
-                        try {
-                            sh '''
-                                dependency-check.sh \
-                                  --project backend \
-                                  --scan Application-Code/backend \
-                                  --noupdate \
-                                  --nvdApiKey=$NVD_API_KEY
-                            '''
-                        } catch (err) {
-                            echo "⚠️ OWASP Dependency-Check failed, but the pipeline will continue."
-                            echo "${err}"
+                        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                            sh """
+                                ${SCANNER_HOME}/bin/sonar-scanner \
+                                -Dsonar.projectKey=backend \
+                                -Dsonar.projectName=backend \
+                                -Dsonar.sources=. \
+                                -Dsonar.login=${SONAR_TOKEN}
+                            """
                         }
                     }
                 }
             }
         }
 
-         stage('Trivy File Scan') {
+        stage('Quality Gate') {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
+                }
+            }
+        }
+
+        stage('Install Node Modules') {
+            steps {
+                dir('Application-Code/backend') {
+                    sh 'npm install'
+                }
+            }
+        }
+
+        stage('OWASP Dependency-Check Scan') {
+            steps {
+                dir('Application-Code/backend') {
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        dependencyCheck additionalArguments: """
+                          --scan .
+                          --disableYarnAudit
+                          --disableNodeAudit
+                          --nvdApiKey ${env.NVD_API_KEY}
+                          --format HTML
+                          --noupdate
+                        """,
+                        odcInstallation: 'DP-Check'
+                    }
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.html'
+                }
+            }
+        }
+
+        stage('Trivy File Scan') {
             steps {
                 dir('Application-Code/backend') {
                     sh 'trivy fs . > trivyfs.txt'
                 }
             }
         }
-        stage("Docker Image Build") {
+
+        stage('NVD Vulnerability Check') {
             steps {
-                script {
-                    dir('Application-Code/backend') {
-                            sh 'docker system prune -f'
-                            sh 'docker container prune -f'
-                            sh 'docker build -t ${AWS_ECR_REPO_NAME} .'
-                    }
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    sh '''
+                      curl -s -H "apiKey: $NVD_API_KEY" \
+                        "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nodejs&resultsPerPage=10" \
+                        -o nvd_vulns.json
+                      echo "NVD vulnerabilities saved to nvd_vulns.json"
+                    '''
                 }
             }
         }
+
+        stage("Docker Image Build") {
+            steps {
+                dir('Application-Code/backend') {
+                    sh 'docker system prune -f'
+                    sh 'docker container prune -f'
+                    sh 'docker build -t ${AWS_ECR_REPO_NAME} .'
+                }
+            }
+        }
+
         stage("ECR Image Pushing") {
             steps {
                 script {
-                        sh 'aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}'
-                        sh 'docker tag ${AWS_ECR_REPO_NAME} ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}'
-                        sh 'docker push ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}'
+                    sh 'aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}'
+                    sh 'docker tag ${AWS_ECR_REPO_NAME} ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}'
+                    sh 'docker push ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}'
                 }
             }
         }
-        stage("TRIVY Image Scan") {
+
+        stage("Trivy Image Scan") {
             steps {
-                sh 'trivy image ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER} > trivyimage.txt' 
+                sh 'trivy image ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER} > trivyimage.txt'
             }
         }
-        stage('Checkout Code') {
+
+        stage('Checkout Code (again)') {
             steps {
-                 git branch: 'e2e-3-tier-DevSecOps', credentialsId: 'github-token', url: 'https://github.com/techlearn-center/DevOps.git'
+                git branch: 'e2e-3-tier-DevSecOps', credentialsId: 'github-token', url: 'https://github.com/asare905/DevOps.git'
             }
         }
+
         stage('Update Kubernetes Deployment') {
-             environment {
+            environment {
                 GIT_REPO_NAME = "DevOps"
-                GIT_USER_NAME = "techlearn-center"
+                GIT_USER_NAME = "asare905"
             }
             steps {
-                script {
-                    dir('Kubernetes-Manifests-file/Backend') {
-                        withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                            sh '''
-                                git config user.email "techlearn-center@gmail.com"
-                                git config user.name "techlearn-center"
-                                BUILD_NUMBER=${BUILD_NUMBER}
-                                echo $BUILD_NUMBER
-                                imageTag=$(grep -oP '(?<=backend:)[^ ]+' deployment.yaml)
-                                echo $imageTag
-                                sed -i "s/${AWS_ECR_REPO_NAME}:${imageTag}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}/" deployment.yaml
-                                git add deployment.yaml
-                                git commit -m "Update deployment Image to version \${BUILD_NUMBER}"
-                                git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:e2e-3-tier-DevSecOps
-                            '''
-                        }
+                dir('Kubernetes-Manifests-file/Backend') {
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh '''
+                            git config user.email "asare905@gmail.com"
+                            git config user.name "asare905"
+                            BUILD_NUMBER=${BUILD_NUMBER}
+                            imageTag=$(grep -oP '(?<=backend:)[^ ]+' deployment.yaml)
+                            sed -i "s/${AWS_ECR_REPO_NAME}:${imageTag}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}/" deployment.yaml
+                            git add deployment.yaml
+                            git commit -m "Update deployment Image to version ${BUILD_NUMBER}"
+                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:e2e-3-tier-DevSecOps
+                        '''
                     }
                 }
             }
         }
     }
+
     post {
-        always {
-            cleanWs()  // Clean workspace after the pipeline runs
-        }
+        always { cleanWs() }
     }
 }
