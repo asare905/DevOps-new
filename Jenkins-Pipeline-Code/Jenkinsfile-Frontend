@@ -96,7 +96,7 @@ pipeline {
 
         stage("Docker Image Build") {
             steps {
-                dir('Application-Code/backend') {
+                dir('Application-Code/frontend') {
                     sh 'docker system prune -f'
                     sh 'docker container prune -f'
                     sh 'docker build -t ${AWS_ECR_REPO_NAME} .'
@@ -132,7 +132,7 @@ pipeline {
                 GIT_USER_NAME = "asare905"
             }
             steps {
-                dir('Kubernetes-Manifests-file/Backend') {
+                dir('Kubernetes-Manifests-file/Frontend') {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                         sh '''
                             git config user.email "asare905@gmail.com"
