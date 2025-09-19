@@ -57,11 +57,17 @@ pipeline {
                 dir('Application-Code/backend') {
                     script {
                         if (fileExists('.') && sh(script: 'ls', returnStatus: true) == 0) {
-                            echo "Running Dependency-Check..."
+                            echo "Running Dependency-Check (offline)..."
                             withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                                 dependencyCheck(
                                     odcInstallation: 'DP-Check', // must match the name in Jenkins
-                                    additionalArguments: "--project frontend --noupdate --nvdApiKey ${NVD_API_KEY}"
+                                    scanPath: '.',
+                                    additionalArguments: [
+                                        '--project frontend',          // your project name
+                                        '--noupdate',                  // disable automatic NVD updates
+                                        '--disableAssembly',           // optional: skip .NET assemblies if not needed
+                                        "--data /var/lib/jenkins/dependency-check-data" // local DB path
+                                    ]
                                 )
                             }
                         } else {
