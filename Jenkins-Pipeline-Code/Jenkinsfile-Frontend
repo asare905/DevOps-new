@@ -8,7 +8,7 @@ pipeline {
     environment  {
         SCANNER_HOME = "${tool 'sonar-scanner'}"
         AWS_ACCOUNT_ID = credentials('ACCOUNT_ID')
-        AWS_ECR_REPO_NAME = credentials('ECR_REPO1')
+        AWS_ECR_REPO_NAME = credentials('ECR_REPO2')
         AWS_DEFAULT_REGION = 'us-east-1'
         REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
     }
@@ -26,16 +26,15 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                dir('Application-Code/frontend') {
+                dir('Application-Code/backend') {
                     withSonarQubeEnv('sonar-server') {
                         withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                             sh """
                                 ${SCANNER_HOME}/bin/sonar-scanner \
-                                -Dsonar.projectKey=frontend \
-                                -Dsonar.projectName=frontend \
+                                -Dsonar.projectKey=backend \
+                                -Dsonar.projectName=backend \
                                 -Dsonar.sources=. \
-                                -Dsonar.login=${SONAR_TOKEN} \
-                                -Dsonar.qualitygate.wait=true
+                                -Dsonar.login=${SONAR_TOKEN}
                             """
                         }
                     }
@@ -51,36 +50,28 @@ pipeline {
             }
         }
 
-        stage('Install Node Modules') {
-            steps {
-                dir('Application-Code/frontend') {
-                    sh 'npm install'
-                }
-            }
-        }
-
         stage('OWASP Dependency-Check Scan') {
             steps {
-                dir('Application-Code/frontend') {
+                dir('Application-Code/backend') {
                     withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        // note: explicit --nvdApiKey parameter
                         dependencyCheck additionalArguments: """
                           --scan .
                           --disableYarnAudit
                           --disableNodeAudit
                           --nvdApiKey ${env.NVD_API_KEY}
                           --format HTML
-                          --noupdate
                         """,
                         odcInstallation: 'DP-Check'
                     }
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.html'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
         }
 
         stage('Trivy File Scan') {
             steps {
-                dir('Application-Code/frontend') {
+                dir('Application-Code/backend') {
                     sh 'trivy fs . > trivyfs.txt'
                 }
             }
@@ -89,19 +80,22 @@ pipeline {
         stage('NVD Vulnerability Check') {
             steps {
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                    sh '''
-                      curl -s -H "apiKey: $NVD_API_KEY" \
-                        "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nodejs&resultsPerPage=10" \
-                        -o nvd_vulns.json
-                      echo "NVD vulnerabilities saved to nvd_vulns.json"
-                    '''
+                    // safest pattern: inject env var then use single quotes in sh
+                    withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) {
+                        sh '''
+                          curl -s -H "apiKey: $NVD_API_KEY" \
+                            "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nodejs&resultsPerPage=10" \
+                            -o nvd_vulns.json
+                          echo "NVD vulnerabilities saved to nvd_vulns.json"
+                        '''
+                    }
                 }
             }
         }
 
         stage("Docker Image Build") {
             steps {
-                dir('Application-Code/frontend') {
+                dir('Application-Code/backend') {
                     sh 'docker system prune -f'
                     sh 'docker container prune -f'
                     sh 'docker build -t ${AWS_ECR_REPO_NAME} .'
@@ -137,13 +131,15 @@ pipeline {
                 GIT_USER_NAME = "asare905"
             }
             steps {
-                dir('Kubernetes-Manifests-file/Frontend') {
+                dir('Kubernetes-Manifests-file/Backend') {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                         sh '''
                             git config user.email "asare905@gmail.com"
                             git config user.name "asare905"
                             BUILD_NUMBER=${BUILD_NUMBER}
-                            imageTag=$(grep -oP '(?<=frontend:)[^ ]+' deployment.yaml)
+                            echo $BUILD_NUMBER
+                            imageTag=$(grep -oP '(?<=backend:)[^ ]+' deployment.yaml)
+                            echo $imageTag
                             sed -i "s/${AWS_ECR_REPO_NAME}:${imageTag}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}/" deployment.yaml
                             git add deployment.yaml
                             git commit -m "Update deployment Image to version ${BUILD_NUMBER}"
