@@ -54,7 +54,7 @@ pipeline {
 
        stage('OWASP Dependency-Check Scan') {
             steps {
-                dir('Application-Code/backend') {
+                dir('Application-Code/frontend') {
                     script {
                         if (fileExists('.') && sh(script: 'ls', returnStatus: true) == 0) {
                             echo "Running Dependency-Check..."
