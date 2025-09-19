@@ -53,22 +53,23 @@ pipeline {
         stages {
 
     stage('OWASP Dependency-Check Scan') {
-      steps {
-        // Inject the API key securely
-        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-          // Use the CLI installed by Jenkins (DP-Check) to run the scan
-          // ${tool 'DP-Check'} resolves to the path of the CLI folder
-          sh """
-            ${tool 'DP-Check'}/bin/dependency-check.sh \
-              --project "Frontend" \
-              --scan . \
-              --out dependency-check-report \
-              --nvdApiKey ${NVD_API_KEY} \
-              --update
-          """
+            steps {
+                dir('Application-Code/backend') {
+                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                        // note: explicit --nvdApiKey parameter
+                        dependencyCheck additionalArguments: """
+                          --scan .
+                          --disableYarnAudit
+                          --disableNodeAudit
+                          --nvdApiKey ${env.NVD_API_KEY}
+                          --format HTML
+                        """,
+                        odcInstallation: 'DP-Check'
+                    }
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
+            }
         }
-      }
-    }
 
     stage('Publish Dependency-Check Report') {
       steps {
