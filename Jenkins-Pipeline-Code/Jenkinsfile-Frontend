@@ -51,24 +51,19 @@ pipeline {
         }
 
         stage('OWASP Dependency-Check Scan') {
-            steps {
-                dir('Application-Code/frontend') {
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        // note: explicit --nvdApiKey parameter
-                        dependencyCheck additionalArguments: """
-                          --scan .
-                          --disableYarnAudit
-                          --disableNodeAudit
-                          --nvdApiKey ${env.NVD_API_KEY}
-                          --format HTML
-                    
-                        """,
-                        odcInstallation: 'DP-Check'
-                    }
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                }
+          steps {
+            withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+              // The plugin picks up the key from CLI args
+              dependencyCheck(
+                odcInstallation: 'DP-Check',        // your Dependency-Check tool name
+                outdir: 'dependency-check-report',  // output folder
+                additionalArguments: "--update --nvdApiKey ${env.NVD_API_KEY}"
+              )
+              dependencyCheckPublisher pattern: '**/dependency-check-report/dependency-check-report.xml'
             }
+          }
         }
+
 
         stage('Trivy File Scan') {
             steps {
