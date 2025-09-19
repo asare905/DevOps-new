@@ -53,16 +53,18 @@ pipeline {
         stage('OWASP Dependency-Check Scan') {
           steps {
             withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-              // The plugin picks up the key from CLI args
+              // run the scan
               dependencyCheck(
-                odcInstallation: 'DP-Check',        // your Dependency-Check tool name
-                outdir: 'dependency-check-report',  // output folder
+                odcInstallation: 'DP-Check',   // name you gave in Manage Jenkins → Global Tool Config
+                scanPath: '.',                 // what to scan (default is workspace)
                 additionalArguments: "--update --nvdApiKey ${env.NVD_API_KEY}"
               )
-              dependencyCheckPublisher pattern: '**/dependency-check-report/dependency-check-report.xml'
+              // publish the report (the plugin puts it in the workspace root)
+              dependencyCheckPublisher pattern: 'dependency-check-report.xml'
             }
           }
         }
+
 
 
         stage('Trivy File Scan') {
