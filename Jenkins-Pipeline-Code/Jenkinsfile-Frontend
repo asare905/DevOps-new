@@ -50,20 +50,35 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency-Check Scan') {
-          steps {
-            withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-              // run the scan
-              dependencyCheck(
-                odcInstallation: 'DP-Check',   // name you gave in Manage Jenkins → Global Tool Config
-                scanPath: '.',                 // what to scan (default is workspace)
-                additionalArguments: "--update --nvdApiKey ${env.NVD_API_KEY}"
-              )
-              // publish the report (the plugin puts it in the workspace root)
-              dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-            }
-          }
+        stages {
+
+    stage('OWASP Dependency-Check Scan') {
+      steps {
+        // Inject the API key securely
+        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+          // Use the CLI installed by Jenkins (DP-Check) to run the scan
+          // ${tool 'DP-Check'} resolves to the path of the CLI folder
+          sh """
+            ${tool 'DP-Check'}/bin/dependency-check.sh \
+              --project "Frontend" \
+              --scan . \
+              --out dependency-check-report \
+              --nvdApiKey ${NVD_API_KEY} \
+              --update
+          """
         }
+      }
+    }
+
+    stage('Publish Dependency-Check Report') {
+      steps {
+        // Publish the XML report generated in the previous step
+        dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
+      }
+    }
+
+  
+
 
 
 
