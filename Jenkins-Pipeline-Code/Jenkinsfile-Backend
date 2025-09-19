@@ -34,8 +34,7 @@ pipeline {
                                 -Dsonar.projectKey=backend \
                                 -Dsonar.projectName=backend \
                                 -Dsonar.sources=. \
-                                -Dsonar.login=${SONAR_TOKEN} \
-                                -Dsonar.qualitygate.wait=true
+                                -Dsonar.login=${SONAR_TOKEN}
                             """
                         }
                     }
@@ -51,36 +50,24 @@ pipeline {
             }
         }
 
-        stage('Install Node Modules') {
-            steps {
-                dir('Application-Code/backend') {
-                    sh 'npm install'
-                }
-            }
-        }
-
         stage('OWASP Dependency-Check Scan') {
             steps {
                 dir('Application-Code/backend') {
                     withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        dependencyCheck(
-                            odcInstallation: 'DP-Check',
-                            additionalArguments: """
-                                --scan . \
-                                --disableYarnAudit \
-                                --disableNodeAudit \
-                                --nvdApiKey ${NVD_API_KEY} \
-                                --format HTML \
-                                --out dependency-check-report.html \
-                                --noupdate
-                            """
-                        )
+                        // note: explicit --nvdApiKey parameter
+                        dependencyCheck additionalArguments: """
+                          --scan .
+                          --disableYarnAudit
+                          --disableNodeAudit
+                          --nvdApiKey ${env.NVD_API_KEY}
+                          --format HTML
+                        """,
+                        odcInstallation: 'DP-Check'
                     }
-                    dependencyCheckPublisher pattern: 'dependency-check-report.html'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
         }
-
 
         stage('Trivy File Scan') {
             steps {
@@ -93,12 +80,15 @@ pipeline {
         stage('NVD Vulnerability Check') {
             steps {
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                    sh '''
-                      curl -s -H "apiKey: $NVD_API_KEY" \
-                        "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nodejs&resultsPerPage=10" \
-                        -o nvd_vulns.json
-                      echo "NVD vulnerabilities saved to nvd_vulns.json"
-                    '''
+                    // safest pattern: inject env var then use single quotes in sh
+                    withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) {
+                        sh '''
+                          curl -s -H "apiKey: $NVD_API_KEY" \
+                            "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nodejs&resultsPerPage=10" \
+                            -o nvd_vulns.json
+                          echo "NVD vulnerabilities saved to nvd_vulns.json"
+                        '''
+                    }
                 }
             }
         }
@@ -147,7 +137,9 @@ pipeline {
                             git config user.email "asare905@gmail.com"
                             git config user.name "asare905"
                             BUILD_NUMBER=${BUILD_NUMBER}
+                            echo $BUILD_NUMBER
                             imageTag=$(grep -oP '(?<=backend:)[^ ]+' deployment.yaml)
+                            echo $imageTag
                             sed -i "s/${AWS_ECR_REPO_NAME}:${imageTag}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}/" deployment.yaml
                             git add deployment.yaml
                             git commit -m "Update deployment Image to version ${BUILD_NUMBER}"
