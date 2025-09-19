@@ -53,17 +53,20 @@ pipeline {
     
 
        stage('OWASP Dependency-Check Scan') {
-            dir('Application-Code/backend') {
-                script {
-                    if (fileExists('.') && sh(script: 'ls', returnStatus: true) == 0) {
-                        echo "Running Dependency-Check..."
-                        dependencyCheck(additionalArguments: '--project MyProject')
-                    } else {
-                        echo "Skipping Dependency-Check: folder is missing or empty"
+            steps {
+                dir('Application-Code/backend') {
+                    script {
+                        if (fileExists('.') && sh(script: 'ls', returnStatus: true) == 0) {
+                            echo "Running Dependency-Check..."
+                            dependencyCheck(additionalArguments: '--project MyProject')
+                        } else {
+                            echo "Skipping Dependency-Check: folder is missing or empty"
+                        }
                     }
                 }
             }
         }
+
 
 
 
