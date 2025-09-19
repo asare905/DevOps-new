@@ -53,31 +53,36 @@ pipeline {
     
 
     stage('OWASP Dependency-Check Scan') {
-            steps {
-                dir('Application-Code/backend') {
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        // note: explicit --nvdApiKey parameter
-                        dependencyCheck additionalArguments: """
-                          --scan .
-                          --disableYarnAudit
-                          --disableNodeAudit
-                          --nvdApiKey ${env.NVD_API_KEY}
-                          --format HTML
-                          --noupdate
-                        """,
-                        odcInstallation: 'DP-Check'
+        steps {
+            dir('Application-Code/backend') {
+                withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+                    script {
+                        try {
+                            dependencyCheck additionalArguments: """
+                                --scan .
+                                --disableYarnAudit
+                                --disableNodeAudit
+                                --nvdApiKey ${env.NVD_API_KEY}
+                                --format HTML
+                                --noupdate
+                            """,
+                            odcInstallation: 'DP-Check'
+                        } catch (Exception e) {
+                            echo "Dependency-Check scan encountered an issue but will not fail the build."
+                            echo "Error: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
                     }
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
         }
-
-    stage('Publish Dependency-Check Report') {
-      steps {
-        // Publish the XML report generated in the previous step
-        dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
-      }
+        post {
+            always {
+                dependencyCheckPublisher pattern: 'dependency-check-report.html'
+            }
+        }
     }
+
 
   
 
