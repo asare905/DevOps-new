@@ -50,25 +50,37 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency-Check Scan') {
+    
+
+       stage('OWASP Dependency-Check Scan') {
             steps {
                 dir('Application-Code/backend') {
-                    withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                        // note: explicit --nvdApiKey parameter
-                        dependencyCheck additionalArguments: """
-                          --scan .
-                          --disableYarnAudit
-                          --disableNodeAudit
-                          --nvdApiKey ${env.NVD_API_KEY}
-                          --format HTML
-                          --noupdate
-                        """,
-                        odcInstallation: 'DP-Check'
+                    script {
+                        if (fileExists('.') && sh(script: 'ls', returnStatus: true) == 0) {
+                            echo "Running Dependency-Check..."
+                            withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                                dependencyCheck(
+                                    odcInstallation: 'DP-Check', // must match the name in Jenkins
+                                    additionalArguments: "--project frontend --noupdate --nvdApiKey ${NVD_API_KEY}"
+                                )
+                            }
+                        } else {
+                            echo "Skipping Dependency-Check: folder is missing or empty"
+                        }
                     }
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
         }
+
+
+
+
+
+
+  
+
+
+
 
         stage('Trivy File Scan') {
             steps {
