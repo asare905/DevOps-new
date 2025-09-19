@@ -52,36 +52,19 @@ pipeline {
 
     
 
-    stage('OWASP Dependency-Check Scan') {
-        steps {
-            dir('Application-Code/backend') {
-                withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
-                    script {
-                        try {
-                            dependencyCheck additionalArguments: """
-                                --scan .
-                                --disableYarnAudit
-                                --disableNodeAudit
-                                --nvdApiKey ${env.NVD_API_KEY}
-                                --format HTML
-                                --noupdate
-                            """,
-                            odcInstallation: 'DP-Check'
-                        } catch (Exception e) {
-                            echo "Dependency-Check scan encountered an issue but will not fail the build."
-                            echo "Error: ${e.getMessage()}"
-                            currentBuild.result = 'UNSTABLE'
-                        }
-                    }
+   stage('OWASP Dependency-Check Scan') {
+        dir('Application-Code/backend') {
+            script {
+                if (fileExists('.') && sh(script: 'ls', returnStatus: true) == 0) {
+                    echo "Running Dependency-Check..."
+                    dependencyCheck(additionalArguments: '--project MyProject')
+                } else {
+                    echo "Skipping Dependency-Check: folder is missing or empty"
                 }
             }
         }
-        post {
-            always {
-                dependencyCheckPublisher pattern: 'dependency-check-report.html'
-            }
-        }
     }
+
 
 
   
