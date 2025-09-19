@@ -34,7 +34,8 @@ pipeline {
                                 -Dsonar.projectKey=backend \
                                 -Dsonar.projectName=backend \
                                 -Dsonar.sources=. \
-                                -Dsonar.login=${SONAR_TOKEN}
+                                -Dsonar.login=${SONAR_TOKEN} \
+                                -Dsonar.qualitygate.wait=true
                             """
                         }
                     }
