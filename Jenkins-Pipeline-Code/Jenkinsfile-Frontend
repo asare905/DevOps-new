@@ -63,6 +63,7 @@ pipeline {
                           --disableNodeAudit
                           --nvdApiKey ${env.NVD_API_KEY}
                           --format HTML
+                          --noupdate
                         """,
                         odcInstallation: 'DP-Check'
                     }
