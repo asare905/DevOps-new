@@ -11,6 +11,8 @@ pipeline {
         AWS_ECR_REPO_NAME = credentials('ECR_REPO1')
         AWS_DEFAULT_REGION = 'us-east-1'
         REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
+        NVD_API_KEY = credentials('nvd-api-key')  // <-- store your NVD API key in Jenkins credentials
+
     }
 
     stages {
@@ -90,21 +92,7 @@ pipeline {
             }
         }
 
-        stage('NVD Vulnerability Check') {
-            steps {
-                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                    // safest pattern: inject env var then use single quotes in sh
-                    withEnv(["NVD_API_KEY=${NVD_API_KEY}"]) {
-                        sh '''
-                          curl -s -H "apiKey: $NVD_API_KEY" \
-                            "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nodejs&resultsPerPage=10" \
-                            -o nvd_vulns.json
-                          echo "NVD vulnerabilities saved to nvd_vulns.json"
-                        '''
-                    }
-                }
-            }
-        }
+    
 
         stage("Docker Image Build") {
             steps {
